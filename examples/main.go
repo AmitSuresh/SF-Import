@@ -32,10 +32,14 @@ func main() {
 		return
 	}
 
-	sesh, err := sfimport.InitiateConnection(username, password, securityToken, instanceURL)
+	sesh, err := sfimport.CreateSession(username, password, securityToken, instanceURL)
 	if err != nil {
 		log.Println("Error initializing connection.")
 		return
+	}
+	err = sesh.InitiateConnection()
+	if err != nil {
+		fmt.Println("Error opening Discord session: ", err)
 	}
 
 	fmt.Println(sesh)
