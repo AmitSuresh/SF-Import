@@ -5,7 +5,7 @@ import (
 	"net/http"
 )
 
-func (s *Session) InitiateConnection1() error {
+func (s *Session) InitiateConnection() error {
 
 	//var dialer *websocket.Dialer
 	//var mx sync.Mutex
