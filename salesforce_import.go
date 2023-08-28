@@ -1,6 +1,6 @@
 package sfimport
 
-func sfimport(username, password, securityToken, instanceURL string) (s *Session, err error) {
+func InitiateConnection(username, password, securityToken, instanceURL string) (s *Session, err error) {
 	sesh := &Session{}
 	s.username = username
 	s.password = password
