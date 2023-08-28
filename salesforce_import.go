@@ -1,12 +1,22 @@
 package sfimport
 
-func CreateSession(username, password, securityToken, instanceURL string) (s *Session, err error) {
-	sesh := &Session{}
-	sesh.username = username
-	sesh.password = password
-	sesh.securityToken = securityToken
-	sesh.instanceURL = instanceURL
-	sesh.endpoint = instanceURL + "/services/data/v53.0/jobs/ingest"
+import "fmt"
 
+const VERSION = "0.0.1"
+
+func CreateSession(clientKey, clientSecret, username, password, securityToken, instanceURL string) (sesh *Session, err error) {
+	sesh = &Session{
+		clientKey:     clientKey,
+		clientSecret:  clientSecret,
+		username:      username,
+		password:      password,
+		securityToken: securityToken,
+		instanceURL:   instanceURL,
+		authURL:       instanceURL + "/services/oauth2/authorize",
+		tokenURL:      instanceURL + "/services/oauth2/token",
+		UserAgent:     "SF-Import (https://github.com/AmitSuresh/SF-Import, v" + VERSION + ")",
+	}
+	fmt.Println(instanceURL)
+	fmt.Println(sesh.instanceURL)
 	return
 }
