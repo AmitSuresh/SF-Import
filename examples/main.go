@@ -30,8 +30,6 @@ func init() {
 	flag.Parse()
 }
 
-//	go run main.go -k "3MVG9fe4g9fhX0E55XnC2xUev_f7hmPow7ARpGooVrrPSFl4HwxbGi9ttS0EhFBMcFXeWFlQDbmAhqOPSoJJu" -s "C2B9136CD8964542F64EADC35E6DF833B37195DBE310D7F2635A1C16E7953661" -u "amit_suresh@batch88.com" -p "IAm100%MoreAnnoyed" -t "wDOLX6KJnWUJlVpOlIviZcnvo" -i "https://login.salesforce.com"
-
 func main() {
 
 	sesh, err := sfimport.CreateSession(clientKey, clientSecret, username, password, securityToken, instanceURL)
