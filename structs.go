@@ -22,4 +22,6 @@ type Session struct {
 	wsMutex       sync.Mutex
 	Dialer        *websocket.Dialer
 	UserAgent     string
+	access_token  string
+	refresh_token string
 }
