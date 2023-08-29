@@ -17,6 +17,7 @@ func CreateSession(clientKey, clientSecret, username, password, securityToken, i
 		instanceURL:   instanceURL,
 		authURL:       instanceURL + "/services/oauth2/authorize",
 		tokenURL:      instanceURL + "/services/oauth2/token",
+		sobjectsURL:   instanceURL + "/services/data/v58.0/sobjects",
 		UserAgent:     "SF-Import (https://github.com/AmitSuresh/SF-Import, v" + VERSION + ")",
 		Client:        &http.Client{Timeout: (20 * time.Second)},
 	}

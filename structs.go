@@ -17,6 +17,7 @@ type Session struct {
 	instanceURL   string
 	authURL       string
 	tokenURL      string
+	sobjectsURL   string
 	Client        *http.Client
 	wsConn        *websocket.Conn
 	wsMutex       sync.Mutex
@@ -25,3 +26,14 @@ type Session struct {
 	access_token  string
 	refresh_token string
 }
+
+type FieldMetadata struct {
+	Name  string `json:"name"`
+	Label string `json:"label"`
+}
+
+type MetadataResponse struct {
+	Fields []FieldMetadata `json:"fields"`
+}
+
+type FieldAPILabelMapping map[string]string

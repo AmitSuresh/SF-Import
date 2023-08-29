@@ -29,7 +29,6 @@ func (sesh *Session) InitiateConnection() error {
 	req.Header.Set("User-Agent", sesh.UserAgent)
 	req.Header.Set("Accept", "*/*")
 
-	//sesh.Client = &http.Client{}
 	resp, err := sesh.Client.Do(req)
 	if err != nil {
 		fmt.Println("Error making request:", err)
@@ -47,7 +46,6 @@ func (sesh *Session) InitiateConnection() error {
 		return err
 	}
 
-	// Assuming the response body contains JSON data, you can unmarshal it
 	var responseData map[string]interface{}
 	err = json.Unmarshal(body, &responseData)
 	if err != nil {
@@ -55,10 +53,6 @@ func (sesh *Session) InitiateConnection() error {
 		return err
 	}
 
-	// Now you can access the response data as needed, e.g., access_token, instance_url, etc.
-	fmt.Println("id:", responseData["id"])
-	fmt.Println("Access Token:", responseData["access_token"])
-	fmt.Println("Instance URL:", responseData["instance_url"])
 	accessToken, ok := responseData["access_token"].(string)
 	if !ok {
 		return errors.New("access_token is not a string.")
@@ -66,4 +60,42 @@ func (sesh *Session) InitiateConnection() error {
 	sesh.access_token = accessToken
 	fmt.Printf("sesh.access_token is: %s", sesh.access_token)
 	return err
+}
+
+func (sesh *Session) BuildDynamicMapping(objectAPI string) (map[string]string, error) {
+
+	metadataURL := fmt.Sprintf("%s/services/data/v53.0/sobjects/%s/describe/", sesh.instanceURL, objectAPI)
+
+	req, _ := http.NewRequest("GET", metadataURL, nil)
+	req.Header.Add("Authorization", "Bearer "+sesh.access_token)
+
+	client := http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Request failed with status: %s", resp.Status)
+	}
+
+	var metadata MetadataResponse
+
+	body, _ := io.ReadAll(resp.Body)
+	err = json.Unmarshal(body, &metadata)
+	if err != nil {
+		return nil, err
+	}
+
+	mapping := make(FieldAPILabelMapping)
+	for _, field := range metadata.Fields {
+		mapping[field.Label] = field.Name
+	}
+
+	if mapping != nil {
+		return mapping, nil
+	}
+
+	return nil, nil
 }
