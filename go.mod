@@ -1,4 +1,4 @@
-module github.com/AmitSuresh/SF-Import
+module github.com/AmitSuresh/sfdataapp
 
 go 1.21.0
 
