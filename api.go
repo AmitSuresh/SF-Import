@@ -1,4 +1,4 @@
-package sfimport
+package sfdataapp
 
 import (
 	"bytes"

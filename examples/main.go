@@ -8,7 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	sfimport "github.com/AmitSuresh/SF-Import"
+	sfimport "github.com/AmitSuresh/sfdataapp"
 )
 
 var (
