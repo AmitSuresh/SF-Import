@@ -8,41 +8,66 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/AmitSuresh/sfdataapp/handlers"
 	"github.com/gorilla/mux"
+	"github.com/joho/godotenv"
 	"go.uber.org/zap"
 )
 
 const (
-	VERSION        = "0.0.1"
-	shutdownTime   = 6 * time.Second
-	httpServerAddr = "0.0.0.0:9090"
+	shutdownTime   = 15 * time.Second
+	httpServerAddr = "localhost:9090"
 )
 
 var (
-	clientKey     string
-	clientSecret  string
-	username      string
-	password      string
-	securityToken string
-	instanceURL   string
+	clientID     string
+	clientSecret string
+	username     string
+	instanceURL  string
+	sfEnv        string
+	keyPath      string
+	version      string
 )
 
 func main() {
 	l, _ := zap.NewProduction()
 	defer l.Sync()
 
+	err := godotenv.Load()
+	if err != nil {
+		l.Error("error loading .env file")
+	}
+
+	clientID = os.Getenv("clientID")
+	clientSecret = os.Getenv("clientSecret")
+	username = os.Getenv("username")
+	instanceURL = os.Getenv("instanceURL")
+	sfEnv = os.Getenv("sfEnv")
+	keyPath = os.Getenv("keyPath")
+	version = os.Getenv("version")
+
+	h, err := handlers.GetHandler(clientID, clientSecret, username, instanceURL, version, keyPath, sfEnv, l)
+	if err != nil {
+		l.Fatal("error creating a new handler", zap.Error(err))
+	}
+
 	sm := mux.NewRouter()
 
 	pR := sm.PathPrefix("/api").Subrouter()
 	getR := pR.Methods(http.MethodGet).Subrouter()
-	getR.HandleFunc("/getpick", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("test")) })
+	getR.HandleFunc("/queryrecords", h.QueryRecords)
+	getR.HandleFunc("/querypicklist", h.GetPickBasedMappingRec)
+
+	postR := pR.Methods(http.MethodPost).Subrouter()
+	postR.HandleFunc("/insertmappedrecords", h.CreateMappedRecords)
+	postR.HandleFunc("/insertbulkmappedrecords", h.CreateBulkMappedRecords)
 
 	httpServer := &http.Server{
 		Addr:         httpServerAddr,
 		Handler:      sm,
 		IdleTimeout:  120 * time.Second,
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 4 * time.Second,
+		ReadTimeout:  60 * time.Second,
+		WriteTimeout: 60 * time.Second,
 		ErrorLog:     zap.NewStdLog(l),
 	}
 

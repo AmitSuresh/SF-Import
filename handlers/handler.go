@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"bytes"
-	"crypto/rsa"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,32 +15,46 @@ import (
 	"go.uber.org/zap"
 )
 
-func GetHandler(key, secret, username, url, v, path string, privateKey *rsa.PrivateKey, l *zap.Logger) (*Handler, error) {
+const VERSION = "0.0.1"
+
+func GetHandler(clientID, secret, username, url, v, path, sfEnv string, l *zap.Logger) (*Handler, error) {
 
 	handler := &Handler{
-		clientKey:    key,
-		clientSecret: secret,
-		username:     username,
-		privateKey:   privateKey,
-		instanceURL:  url,
-		authURL:      url + "/services/oauth2/authorize",
-		tokenURL:     url + "/services/oauth2/token",
-		sobjectsURL:  url + "/services/data/v58.0/sobjects",
-		UserAgent:    "sfdataapp (https://github.com/AmitSuresh/sfdataapp, v" + v + ")",
-		l:            l,
+		clientID:      clientID,
+		clientSecret:  secret,
+		username:      username,
+		sfEnv:         sfEnv,
+		instanceURL:   url,
+		authURL:       url + "/services/oauth2/authorize",
+		tokenURL:      url + "/services/oauth2/token",
+		sobjectsURL:   url + "/services/data/v58.0/sobjects",
+		queryURL:      url + "/services/data/v58.0/query?q=",
+		uiapiURL:      url + "/services/data/v58.0/ui-api/object-info/",
+		uiapibatchURL: url + "/services/data/v58.0/ui-api/records/batch",
+		ingestURL:     url + "/services/data/v61.0/jobs/ingest",
+
+		UserAgent: "sfdataapp (https://github.com/AmitSuresh/sfdataapp, v" + VERSION + ")",
+		l:         l,
+		pKeyPath:  path,
+		client:    &http.Client{Timeout: 30 * time.Second},
 	}
 
-	jwtTok, err := handler.createJWT(path)
+	jwtTok, err := handler.createJWT(handler.pKeyPath, handler.sfEnv)
 	if err != nil {
 		l.Fatal("error creating jwtToken", zap.Error(err))
 		return nil, err
 	}
 
 	handler.jwtToken = jwtTok
+
+	if err := handler.GetAccessToken(); err != nil {
+		l.Fatal("error accessing", zap.Error(err))
+		return nil, err
+	}
 	return handler, nil
 }
 
-func (h *Handler) createJWT(p string) (string, error) {
+func (h *Handler) createJWT(p, s string) (string, error) {
 
 	keyData, err := os.ReadFile(p)
 	if err != nil {
@@ -52,12 +65,12 @@ func (h *Handler) createJWT(p string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	now := time.Now().Unix()
+	expirationTime := time.Now().Add(30 * time.Minute).Unix()
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
-		"iss": h.clientKey,
+		"iss": h.clientID,
 		"sub": h.username,
-		"aud": "https://test.salesforce.com",
-		"exp": now + 300,
+		"aud": fmt.Sprintf("https://%s.salesforce.com", s),
+		"exp": expirationTime,
 	})
 
 	tokenString, err := token.SignedString(privateKey)
@@ -65,6 +78,7 @@ func (h *Handler) createJWT(p string) (string, error) {
 		return "", err
 	}
 
+	h.l.Info("token", zap.Any("", tokenString))
 	return tokenString, nil
 }
 
@@ -84,8 +98,7 @@ func (h *Handler) GetAccessToken() error {
 	req.Header.Set("User-Agent", h.UserAgent)
 	req.Header.Set("Accept", "*/*")
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := h.client.Do(req)
 	if err != nil {
 		fmt.Println("Error making request:", err)
 		return err
@@ -115,12 +128,6 @@ func (h *Handler) GetAccessToken() error {
 	}
 	h.accessToken = accessToken
 
-	refreshToken, ok := responseData["refresh_token"].(string)
-	if !ok {
-		return errors.New("refresh_token is not a string")
-	}
-	h.refreshToken = refreshToken
-
 	return err
 }
 
@@ -131,8 +138,7 @@ func (h *Handler) BuildDynamicMapping(objectAPI string) (map[string]string, erro
 	req, _ := http.NewRequest("GET", metadataURL, nil)
 	req.Header.Add("Authorization", "Bearer "+h.accessToken)
 
-	client := http.Client{}
-	resp, err := client.Do(req)
+	resp, err := h.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -156,4 +162,31 @@ func (h *Handler) BuildDynamicMapping(objectAPI string) (map[string]string, erro
 	}
 
 	return mapping, nil
+}
+
+func ToJSON(i interface{}, w io.Writer) error {
+	e := json.NewEncoder(w)
+	return e.Encode(i)
+}
+
+func FromJSON(i interface{}, r io.Reader) error {
+	e := json.NewDecoder(r)
+	return e.Decode(i)
+}
+
+func (h *Handler) handleNewRequest(method, url string, b io.Reader) (*http.Response, error) {
+
+	req, err := http.NewRequest(method, url, b)
+	if err != nil {
+		h.l.Error("error creating request", zap.Error(err))
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+h.accessToken)
+
+	resp, err := h.client.Do(req)
+	if err != nil {
+		h.l.Error("error sending request", zap.Error(err))
+		return nil, err
+	}
+	return resp, nil
 }
