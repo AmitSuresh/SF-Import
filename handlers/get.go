@@ -3,11 +3,12 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
-	"html"
 	"net/http"
 	"net/url"
 	"strings"
 
+	rbmq "github.com/AmitSuresh/sfdataapp/rabbitmq"
+	"github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
 )
 
@@ -37,75 +38,71 @@ func (h *Handler) GetPickBasedMappingRec(w http.ResponseWriter, r *http.Request)
 
 	h.l.Info("\n", zap.Any("", customRecMap))
 
-	var eq EquipmentRecords
-	var rec RecommendationRecords
-
 	if len(customRecMap["Recommendation"]) > 0 && len(customRecMap["Direct Install"]) > 0 {
-		processMapping := func(recordType string, fieldName string, targetRecords interface{}) error {
+		processMapping := func(recordType string, fieldName string) error {
 			for _, v := range customRecMap[recordType] {
 				p.RecTypeID = v.RecTypeId
 				p.FieldName = fieldName
 				pickURL := fmt.Sprintf("%s%s/picklist-values/%s/%s", h.uiapiURL, p.SObject, p.RecTypeID, p.FieldName)
 				h.l.Info(pickURL)
 
-				resp, err := h.handleNewRequest(http.MethodGet, pickURL, nil)
+				q, err := h.amqpCh.QueueDeclare(rbmq.PicklistQueryEvent, true, false, false, false, nil)
 				if err != nil {
-					h.l.Error("error with request", zap.Error(err))
-				}
-				defer resp.Body.Close()
-
-				pickResponse := new(PicklistQueryResponse)
-				err = FromJSON(pickResponse, resp.Body)
-				if err != nil {
-					h.l.Error("error unmarshalling response:", zap.Error(err))
+					h.l.Error("error declaring queue", zap.Error(err))
+					return err
 				}
 
-				h.l.Info("\n", zap.Any("", pickResponse))
-				for _, val := range pickResponse.PicklistValues {
-					switch records := targetRecords.(type) {
-					case *RecommendationRecords:
-						*records = append(*records, RecommendationRecord{
-							PicklistVal: html.UnescapeString(val.PickValues),
-							MeasureName: v.MeasureNameNew,
-							ProgName:    v.ProgRec.Name,
-						})
-					case *EquipmentRecords:
-						*records = append(*records, EquipmentRecord{
-							PicklistVal: html.UnescapeString(val.PickValues),
-							MeasureName: v.MeasureNameNew,
-							ProgName:    v.ProgRec.Name,
-						})
-					}
+				request := &rbmq.PicklistQueueRequest{
+					Method:      http.MethodGet,
+					Url:         pickURL,
+					Body:        nil,
+					AccessToken: h.accessToken,
+					CustomObj: rbmq.CustomRecords{
+						Id:             v.Id,
+						MeasureNameNew: v.MeasureNameNew,
+						RecTypeName:    v.RecTypeName,
+						RecTypeId:      v.RecTypeId,
+						ProgRec:        rbmq.ProgramRecord(v.ProgRec),
+					},
+					RecordType: recordType,
 				}
+
+				marshalledReq, err := json.Marshal(request)
+				if err != nil {
+					h.l.Error("error marshalling", zap.Error(err))
+				}
+
+				err = h.amqpCh.PublishWithContext(r.Context(), "", q.Name, false, false, amqp091.Publishing{
+					ContentType: "application/json",
+					Body:        marshalledReq,
+				})
+				if err != nil {
+					h.l.Error("error publishing request", zap.Error(err))
+					return err
+				}
+				h.l.Info("Published to queue", zap.String("queue", q.Name))
 			}
 			return nil
 		}
 
-		if err := processMapping("Recommendation", "Recommendation__c", &rec); err != nil {
+		if err := processMapping("Recommendation", "Recommendation__c"); err != nil {
 			h.l.Error("error processing recommendations", zap.Error(err))
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		if err := processMapping("Direct Install", "Equipment_Type__c", &eq); err != nil {
+		if err := processMapping("Direct Install", "Equipment_Type__c"); err != nil {
 			h.l.Error("error processing equipment", zap.Error(err))
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-
-		res := PicklistMappedResp{
-			Eqs:  eq,
-			Recs: rec,
-		}
-		err = ToJSON(res, w)
-		if err != nil {
-			h.l.Error("error marshalling", zap.Error(err))
-		}
-		h.l.Info("\n", zap.Any("recommendation map", rec))
-		h.l.Info("\n", zap.Any("equipment map", eq))
 	}
 
 	w.WriteHeader(http.StatusOK)
+	_, err = w.Write([]byte("Request is placed successfully."))
+	if err != nil {
+		h.l.Error("error writing response", zap.Error(err))
+	}
 }
 
 func (h *Handler) QueryRecords(w http.ResponseWriter, r *http.Request) {
