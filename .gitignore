@@ -49,6 +49,7 @@ builds/**/images/*
 #*.png
 #*.jpeg
 *.work
+*.csv
 *.json
 
 # security / ssl
