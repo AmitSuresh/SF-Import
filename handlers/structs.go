@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 
+	"github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
 )
 
@@ -26,6 +27,9 @@ type Handler struct {
 
 	l      *zap.Logger
 	client *http.Client
+
+	amqpCh    *amqp091.Channel
+	amqpClose func() error
 }
 
 type FieldMetadata struct {

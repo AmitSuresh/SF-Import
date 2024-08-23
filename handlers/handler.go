@@ -13,11 +13,13 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"go.uber.org/zap"
+
+	rbmq "github.com/AmitSuresh/sfdataapp/rabbitmq"
 )
 
 const VERSION = "0.0.1"
 
-func GetHandler(clientID, secret, username, url, v, path, sfEnv string, l *zap.Logger) (*Handler, error) {
+func GetHandler(clientID, secret, username, url, v, path, sfEnv string, rbmqCfg *rbmq.Config, l *zap.Logger) (*Handler, error) {
 
 	handler := &Handler{
 		clientID:      clientID,
@@ -51,6 +53,13 @@ func GetHandler(clientID, secret, username, url, v, path, sfEnv string, l *zap.L
 		l.Fatal("error accessing", zap.Error(err))
 		return nil, err
 	}
+
+	handler.amqpCh, handler.amqpClose, err = rbmq.ConnectAmqp(rbmqCfg, handler.l)
+	if err != nil {
+		l.Fatal("failed to connect to RabbitMQ", zap.Error(err))
+		return nil, err
+	}
+
 	return handler, nil
 }
 

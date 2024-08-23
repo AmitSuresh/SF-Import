@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/AmitSuresh/sfdataapp/handlers"
+	rbmq "github.com/AmitSuresh/sfdataapp/rabbitmq"
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	"go.uber.org/zap"
@@ -20,13 +21,8 @@ const (
 )
 
 var (
-	clientID     string
-	clientSecret string
-	username     string
-	instanceURL  string
-	sfEnv        string
-	keyPath      string
-	version      string
+	clientID, clientSecret, username, instanceURL, sfEnv, keyPath, version string
+	rbmqCfg                                                                *rbmq.Config
 )
 
 func main() {
@@ -46,7 +42,13 @@ func main() {
 	keyPath = os.Getenv("keyPath")
 	version = os.Getenv("version")
 
-	h, err := handlers.GetHandler(clientID, clientSecret, username, instanceURL, version, keyPath, sfEnv, l)
+	c, err := rbmq.LoadConfig(l)
+	if err != nil {
+		l.Fatal("failed to load configuration", zap.Error(err))
+	}
+	rbmqCfg = c
+
+	h, err := handlers.GetHandler(clientID, clientSecret, username, instanceURL, version, keyPath, sfEnv, rbmqCfg, l)
 	if err != nil {
 		l.Fatal("error creating a new handler", zap.Error(err))
 	}
